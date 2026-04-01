@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Client — JANUS</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2230; --border: #263045;
+    --teal: #14b8a6; --teal-dim: #0d3d38;
+    --green: #22c55e; --green-dim: #14532d;
+    --red: #ef4444; --red-dim: #7f1d1d;
+    --orange: #f97316; --orange-dim: #7c2d12;
+    --text: #e2e8f0; --muted: #64748b; --accent: #2dd4bf;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .logo { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent); }
+  .logo span { color: var(--muted); font-weight: 600; font-size: 14px; margin-left: 10px; }
+  .header-right { display: flex; align-items: center; gap: 12px; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+  .date-badge { background: var(--surface2); border: 1px solid var(--border); padding: 5px 12px; border-radius: 6px; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px 90px; }
+
+  .meta-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; }
+  .meta-panel h2 { font-family: 'Syne', sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-bottom: 14px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .field-group label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+  .field-group input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 8px 11px; outline: none; transition: border-color .2s; }
+  .field-group input:focus { border-color: var(--teal); }
+
+  .progress-wrap { margin-bottom: 24px; }
+  .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .progress-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; }
+  .progress-pct { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; color: var(--accent); }
+  .bar-bg { height: 7px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--teal), var(--green)); border-radius: 99px; transition: width .4s cubic-bezier(.4,0,.2,1); width: 0%; }
+
+  .section { margin-bottom: 16px; }
+  .section-header { display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px 10px 0 0; cursor: pointer; user-select: none; transition: background .15s; }
+  .section-header:hover { background: var(--surface2); }
+  .section-header.collapsed { border-radius: 10px; }
+  .section-icon { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .section-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; flex: 1; }
+  .section-badge { font-family: 'DM Mono', monospace; font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--surface2); border: 1px solid var(--border); }
+  .badge-ok { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .badge-warn { background: var(--orange-dim); border-color: var(--orange); color: var(--orange); }
+  .badge-ko { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .section-chevron { font-size: 11px; color: var(--muted); transition: transform .2s; }
+  .section-header.collapsed .section-chevron { transform: rotate(-90deg); }
+  .section-body { border: 1px solid var(--border); border-top: none; border-radius: 0 0 10px 10px; overflow: hidden; }
+
+  .check-item { display: flex; align-items: flex-start; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--border); transition: background .15s; }
+  .check-item:last-child { border-bottom: none; }
+  .check-item:hover { background: rgba(255,255,255,.02); }
+  .check-info { flex: 1; min-width: 0; }
+  .check-label { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+  .check-desc { font-size: 11px; color: var(--muted); line-height: 1.6; font-style: italic; }
+
+  /* sub-options (signature mode, etc.) */
+  .sub-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .sub-btn { padding: 3px 11px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 11px; font-family: 'DM Mono', monospace; cursor: pointer; transition: all .15s; }
+  .sub-btn:hover { border-color: var(--teal); color: var(--text); }
+  .sub-btn.active { background: var(--teal-dim); border-color: var(--teal); color: var(--accent); }
+
+  /* poste à risque toggle — OUI / NON / NC */
+  .risk-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .risk-label { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .risk-btn { width: 34px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 11px; font-family: 'DM Mono', monospace; font-weight: 700; cursor: pointer; transition: all .15s; display: flex; align-items: center; justify-content: center; }
+  .risk-btn:hover { border-color: var(--teal); color: var(--text); }
+  .risk-btn.r-oui  { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
+  .risk-btn.r-non  { background: #14532d; border-color: #22c55e; color: #86efac; }
+  .risk-btn.r-nc   { background: #1e3a5f; border-color: #3b82f6; color: #93c5fd; }
+
+  .check-controls { display: flex; gap: 5px; align-items: center; margin-left: auto; flex-shrink: 0; padding-left: 10px; }
+  .btn-status { padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); font-size: 11px; font-family: 'DM Mono', monospace; cursor: pointer; transition: all .15s; white-space: nowrap; }
+  .btn-status:hover { border-color: var(--teal); color: var(--text); }
+  .btn-status.active-ok { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .btn-status.active-ko { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .btn-status.active-na { background: var(--surface2); border-color: var(--muted); color: var(--muted); }
+
+  .status-btn { width: 24px; height: 24px; border-radius: 6px; border: 2px solid var(--border); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: all .15s; flex-shrink: 0; margin-top: 2px; }
+  .status-btn:hover { border-color: var(--teal); }
+  .status-btn.ok { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .status-btn.ko { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .status-btn.na { background: var(--surface2); border-color: var(--muted); color: var(--muted); }
+
+  .note-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; color: var(--muted); font-size: 11px; font-family: 'DM Sans', sans-serif; padding: 5px 8px; resize: none; outline: none; transition: border-color .2s, color .2s; margin-top: 6px; }
+  .note-input:focus { border-color: var(--teal); color: var(--text); }
+
+  .summary-panel { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 12px 28px; display: flex; align-items: center; gap: 22px; z-index: 99; }
+  .stat-pill { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  .stat-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .stat-num { font-family: 'DM Mono', monospace; font-weight: 500; }
+  .btn-export { margin-left: auto; background: var(--teal); color: #0d1117; border: none; padding: 9px 20px; border-radius: 8px; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 13px; cursor: pointer; transition: opacity .15s; }
+  .btn-export:hover { opacity: .85; }
+  .btn-reset { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; font-size: 12px; cursor: pointer; transition: color .15s; }
+  .btn-reset:hover { color: var(--text); }
+
+  @media (max-width: 640px) {
+    header { padding: 12px 14px; }
+    .container { padding: 16px 10px 90px; }
+    .check-controls { display: none; }
+    .summary-panel { gap: 10px; padding: 10px 14px; }
+    .stat-pill span:not(.stat-num) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">JANUS <span>Audit Client — Tempo</span></div>
+  <div class="header-right">
+    <div class="date-badge" id="currentDate"></div>
+    <div class="date-badge">Référent Territorial</div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="meta-panel">
+    <h2>Informations de l'audit</h2>
+    <div class="meta-grid">
+      <div class="field-group"><label>Agence</label><input type="text" id="agence" placeholder="ex: Agence Calais"></div>
+      <div class="field-group"><label>Nom du client</label><input type="text" id="client" placeholder="Raison sociale"></div>
+      <div class="field-group"><label>Date de l'audit</label><input type="date" id="dateAudit"></div>
+      <div class="field-group"><label>Auditeur</label><input type="text" id="auditeur" value="CLEENEWERCK Alexandre"></div>
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-header">
+      <div class="progress-title">Avancement de l'audit</div>
+      <div class="progress-pct" id="pctDisplay">0%</div>
+    </div>
+    <div class="bar-bg"><div class="bar-fill" id="progressBar"></div></div>
+  </div>
+
+  <div id="sections"></div>
+</div>
+
+<div class="summary-panel">
+  <div class="stat-pill"><div class="stat-dot" style="background:var(--green)"></div><span class="stat-num" id="countOk">0</span><span style="color:var(--muted)">Conformes</span></div>
+  <div class="stat-pill"><div class="stat-dot" style="background:var(--red)"></div><span class="stat-num" id="countKo">0</span><span style="color:var(--muted)">Non conformes</span></div>
+  <div class="stat-pill"><div class="stat-dot" style="background:var(--muted)"></div><span class="stat-num" id="countNa">0</span><span style="color:var(--muted)">N/A</span></div>
+  <div class="stat-pill"><div class="stat-dot" style="background:var(--teal)"></div><span class="stat-num" id="countPending">0</span><span style="color:var(--muted)">À vérifier</span></div>
+  <button class="btn-reset" onclick="resetAll()">Réinitialiser</button>
+  <button class="btn-export" onclick="exportAudit()">📄 Exporter le rapport</button>
+</div>
+
+<script>
+// subState: pour les boutons radio (signature, poste à risque)
+const subState = {};
+// riskState: 'O' | 'N' | 'C' | null
+let riskState = null;
+
+const SECTIONS = [
+  {
+    id: 's1', icon: '📑', color: '#14b8a6', title: 'Documents — Offre commerciale / Accord cadre',
+    items: [
+      {
+        id: 'doc1',
+        label: 'Offre commerciale signée présente dans Tempo',
+        desc: 'Une offre commerciale signée est jointe dans Tempo — OU, en cas d\'accord cadre, les conditions commerciales (CC) sont présentes',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'doc2',
+        label: 'Premier contrat signé — mode de signature',
+        desc: 'Le premier contrat client est signé selon l\'un des modes suivants :',
+        subOptions: ['Dématérialisé via Armado', 'EDI — Pixid / BAPS', 'Retour mail client', 'Courrier client'],
+        hasRisk: false
+      },
+      {
+        id: 'doc3',
+        label: 'Liste des postes à risque déposée dans Tempo',
+        desc: 'Si applicable : la liste des postes à risque identifiés chez ce client est présente dans les documents Tempo. N/A si aucun poste à risque.',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'doc4',
+        label: 'Client créé dans CNW',
+        desc: 'La fiche client est créée et active dans CNW (Clic N Work)',
+        subOptions: null, hasRisk: false
+      },
+    ]
+  },
+  {
+    id: 's2', icon: '⌨️', color: '#3b82f6', title: 'Saisie Tempo',
+    items: [
+      {
+        id: 'saisie1',
+        label: 'DAC Altradius — montant et date renseignés',
+        desc: 'Si le client est couvert par une DAC Altradius : le montant accordé et la date de validité sont saisis dans Tempo. N/A si pas de DAC.',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'saisie2',
+        label: 'Coefficients heures renseignés',
+        desc: 'Les coefficients sur les heures sont saisis correctement dans la fiche client Tempo',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'saisie3',
+        label: 'Coefficients primes renseignés',
+        desc: 'Les coefficients sur les primes sont saisis correctement dans la fiche client Tempo',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'saisie4',
+        label: 'Éléments non imposables renseignés',
+        desc: 'Les éléments non imposables (panier, déplacement, hébergement…) sont saisis dans la fiche client Tempo',
+        subOptions: null, hasRisk: false
+      },
+    ]
+  },
+  {
+    id: 's3', icon: '👥', color: '#8b5cf6', title: 'Interlocuteurs',
+    items: [
+      {
+        id: 'inter1',
+        label: 'Contact commandes renseigné',
+        desc: 'Au moins un interlocuteur identifié et saisi pour la gestion des commandes (nom, fonction, coordonnées)',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'inter2',
+        label: 'Contact facturation renseigné',
+        desc: 'Au moins un interlocuteur identifié et saisi pour la facturation (nom, fonction, coordonnées, e-mail de facturation)',
+        subOptions: null, hasRisk: false
+      },
+    ]
+  },
+  {
+    id: 's4', icon: '💳', color: '#f59e0b', title: 'Facturation',
+    items: [
+      {
+        id: 'fact1',
+        label: 'Mode de règlement renseigné',
+        desc: 'Le mode de règlement est saisi dans Tempo (virement, chèque, prélèvement…)',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'fact2',
+        label: 'Échéance de paiement renseignée',
+        desc: 'Le délai de paiement est saisi dans Tempo (ex : 30 jours, 45 jours fin de mois…)',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'fact3',
+        label: 'TVA intracommunautaire vérifiée',
+        desc: 'Numéro de TVA intracommunautaire renseigné si applicable (client UE hors France). N/A si client France.',
+        subOptions: null, hasRisk: false
+      },
+    ]
+  },
+  {
+    id: 's5', icon: '🔍', color: '#ec4899', title: 'Qualification client',
+    items: [
+      {
+        id: 'qualif1',
+        label: 'Au moins une qualification à jour dans Tempo',
+        desc: 'La fiche client comporte au minimum une qualification renseignée et à jour (secteur, profils recherchés, conditions de travail, EPI requis…)',
+        subOptions: null, hasRisk: false
+      },
+      {
+        id: 'qualif2',
+        label: 'Poste(s) à risque',
+        desc: 'Indiquer si des postes à risque ont été identifiés chez ce client :',
+        subOptions: null, hasRisk: true
+      },
+    ]
+  },
+];
+
+const state = {}, notes = {};
+SECTIONS.forEach(s => s.items.forEach(i => {
+  state[i.id] = null;
+  notes[i.id] = '';
+  if (i.subOptions) subState[i.id] = null;
+}));
+const collapsedSections = {};
+
+function render() {
+  const container = document.getElementById('sections');
+  container.innerHTML = '';
+  SECTIONS.forEach(section => {
+    const el = document.createElement('div');
+    el.className = 'section';
+    const items = section.items;
+    const done = items.filter(i => state[i.id] !== null).length;
+    const ko = items.filter(i => state[i.id] === 'ko').length;
+    let badgeClass = '';
+    if (done === items.length) badgeClass = ko > 0 ? 'badge-ko' : 'badge-ok';
+    else if (done > 0) badgeClass = 'badge-warn';
+    const isCollapsed = collapsedSections[section.id] || false;
+    el.innerHTML = `
+      <div class="section-header ${isCollapsed ? 'collapsed' : ''}" onclick="toggleSection('${section.id}')">
+        <div class="section-icon" style="background:${section.color}22;color:${section.color}">${section.icon}</div>
+        <div class="section-title">${section.title}</div>
+        <div class="section-badge ${badgeClass}">${done}/${items.length}</div>
+        <div class="section-chevron">▼</div>
+      </div>
+      <div class="section-body" id="body_${section.id}" style="display:${isCollapsed ? 'none' : ''}">
+        ${items.map(item => renderItem(item)).join('')}
+      </div>`;
+    container.appendChild(el);
+  });
+  updateProgress();
+}
+
+function renderItem(item) {
+  const s = state[item.id];
+
+  // Sub-options (signature mode)
+  const subOptionsHtml = item.subOptions ? `
+    <div class="sub-options">
+      ${item.subOptions.map((opt, idx) => `
+        <button class="sub-btn ${subState[item.id] === idx ? 'active' : ''}"
+          onclick="setSubOption('${item.id}', ${idx})">${opt}</button>
+      `).join('')}
+    </div>` : '';
+
+  // Poste à risque toggle
+  const riskHtml = item.hasRisk ? `
+    <div class="risk-row">
+      <span class="risk-label">Postes à risque :</span>
+      <button class="risk-btn ${riskState==='O'?'r-oui':''}" onclick="setRisk('O')" title="Oui">O</button>
+      <button class="risk-btn ${riskState==='N'?'r-non':''}" onclick="setRisk('N')" title="Non">N</button>
+      <button class="risk-btn ${riskState==='C'?'r-nc':''}"  onclick="setRisk('C')" title="Non communiqué">NC</button>
+      <span style="font-size:11px;color:var(--muted);margin-left:4px">
+        ${riskState==='O'?'<span style="color:#fca5a5">Oui — postes à risque identifiés</span>':riskState==='N'?'<span style="color:#86efac">Non — aucun poste à risque</span>':riskState==='C'?'<span style="color:#93c5fd">Non communiqué</span>':''}
+      </span>
+    </div>` : '';
+
+  return `
+    <div class="check-item" id="item_${item.id}">
+      <button class="status-btn ${s||''}" onclick="cycleStatus('${item.id}')" title="Clic pour changer">
+        ${s==='ok'?'✓':s==='ko'?'✗':s==='na'?'—':''}
+      </button>
+      <div class="check-info">
+        <div class="check-label">${item.label}</div>
+        <div class="check-desc">${item.desc}</div>
+        ${subOptionsHtml}
+        ${riskHtml}
+        <textarea class="note-input" rows="1" placeholder="Observation…"
+          oninput="saveNote('${item.id}', this.value)"
+          style="display:${s ? 'block' : 'none'}">${notes[item.id]}</textarea>
+      </div>
+      <div class="check-controls">
+        <button class="btn-status ${s==='ok'?'active-ok':''}" onclick="setStatus('${item.id}','ok')">✓ OK</button>
+        <button class="btn-status ${s==='ko'?'active-ko':''}" onclick="setStatus('${item.id}','ko')">✗ KO</button>
+        <button class="btn-status ${s==='na'?'active-na':''}" onclick="setStatus('${item.id}','na')">— N/A</button>
+      </div>
+    </div>`;
+}
+
+function setRisk(val) { riskState = riskState === val ? null : val; render(); }
+function setSubOption(id, idx) { subState[id] = subState[id] === idx ? null : idx; render(); }
+function toggleSection(id) { collapsedSections[id] = !collapsedSections[id]; render(); }
+function cycleStatus(id) { const c=state[id]; state[id]=c===null?'ok':c==='ok'?'ko':c==='ko'?'na':null; render(); }
+function setStatus(id,val) { state[id]=state[id]===val?null:val; render(); }
+function saveNote(id,val) { notes[id]=val; }
+
+function updateProgress() {
+  const all = Object.keys(state);
+  const done = all.filter(k=>state[k]!==null).length;
+  const pct = Math.round((done/all.length)*100);
+  document.getElementById('progressBar').style.width = pct+'%';
+  document.getElementById('pctDisplay').textContent = pct+'%';
+  document.getElementById('countOk').textContent = all.filter(k=>state[k]==='ok').length;
+  document.getElementById('countKo').textContent = all.filter(k=>state[k]==='ko').length;
+  document.getElementById('countNa').textContent = all.filter(k=>state[k]==='na').length;
+  document.getElementById('countPending').textContent = all.length-done;
+}
+
+function resetAll() {
+  if (!confirm('Réinitialiser tous les éléments ?')) return;
+  Object.keys(state).forEach(k=>{state[k]=null;notes[k]='';});
+  Object.keys(subState).forEach(k=>{subState[k]=null;});
+  riskState = null;
+  render();
+}
+
+function riskLabel(v) {
+  return v==='O'?'Oui — postes à risque identifiés':v==='N'?'Non — aucun poste à risque':v==='C'?'Non communiqué':'Non renseigné';
+}
+
+function exportAudit() {
+  const agence = document.getElementById('agence').value||'Non renseigné';
+  const client = document.getElementById('client').value||'Non renseigné';
+  const dateAudit = document.getElementById('dateAudit').value||'';
+  const auditeur = document.getElementById('auditeur').value||'CLEENEWERCK Alexandre';
+  const all=Object.keys(state);
+  const ok=all.filter(k=>state[k]==='ok').length;
+  const ko=all.filter(k=>state[k]==='ko').length;
+  const na=all.filter(k=>state[k]==='na').length;
+  const pend=all.filter(k=>state[k]===null).length;
+
+  let html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport Audit Client — ${client}</title>
+<style>
+body{font-family:Arial,sans-serif;font-size:12px;color:#1e293b;margin:28px}
+h1{color:#0d9488;font-size:18px;margin-bottom:4px}.subtitle{color:#64748b;font-size:12px;margin-bottom:20px}
+h2{color:#0d9488;font-size:13px;border-bottom:2px solid #ccfbf1;padding-bottom:3px;margin-top:22px;margin-bottom:6px}
+table{width:100%;border-collapse:collapse;margin-top:4px;font-size:11px}
+th{background:#f0fdfa;text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+td{padding:6px 8px;border-bottom:1px solid #f0fdfa;vertical-align:top}
+.ok{color:#16a34a;font-weight:bold}.ko{color:#dc2626;font-weight:bold}.na{color:#64748b}.pend{color:#d97706}
+.meta{background:#f8fafc;padding:12px 16px;border-radius:6px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;border:1px solid #e2e8f0}
+.meta-item label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;display:block}
+.meta-item strong{font-size:13px;color:#1e293b}
+.summary{display:flex;gap:12px;margin-bottom:18px}
+.stat{padding:10px 18px;border-radius:7px;text-align:center;min-width:80px}
+.stat-val{font-size:20px;font-weight:bold}.stat-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.s-ok{background:#dcfce7;color:#15803d}.s-ko{background:#fee2e2;color:#b91c1c}.s-na{background:#f1f5f9;color:#475569}.s-p{background:#fef3c7;color:#b45309}
+.sub-tag{background:#ccfbf1;color:#0f766e;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:bold;margin-left:4px}
+.risk-oui{background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:bold}
+.risk-non{background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:bold}
+.risk-nc{background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:bold}
+.ko-section{background:#fff5f5;border:1px solid #fecaca;border-radius:6px;padding:12px;margin-top:20px}
+.footer{margin-top:36px;color:#94a3b8;font-size:10px;border-top:1px solid #e2e8f0;padding-top:10px}
+@media print{body{margin:14px}}
+</style></head><body>
+<h1>Rapport d'audit Client — JANUS</h1>
+<div class="subtitle">Référent Territorial — Audit fiche client Tempo</div>
+<div class="meta">
+  <div class="meta-item"><label>Agence</label><strong>${agence}</strong></div>
+  <div class="meta-item"><label>Client audité</label><strong>${client}</strong></div>
+  <div class="meta-item"><label>Date de l'audit</label><strong>${dateAudit?new Date(dateAudit).toLocaleDateString('fr-FR'):'—'}</strong></div>
+  <div class="meta-item"><label>Auditeur</label><strong>${auditeur}</strong></div>
+</div>
+<div class="summary">
+  <div class="stat s-ok"><div class="stat-val">${ok}</div><div class="stat-lbl">Conformes</div></div>
+  <div class="stat s-ko"><div class="stat-val">${ko}</div><div class="stat-lbl">Non conformes</div></div>
+  <div class="stat s-na"><div class="stat-val">${na}</div><div class="stat-lbl">N/A</div></div>
+  <div class="stat s-p"><div class="stat-val">${pend}</div><div class="stat-lbl">À vérifier</div></div>
+</div>`;
+
+  SECTIONS.forEach(section=>{
+    html+=`<h2>${section.icon} ${section.title}</h2><table><tr><th>Point de contrôle</th><th style="width:100px">Statut</th><th>Détail / Observation</th></tr>`;
+    section.items.forEach(item=>{
+      const s=state[item.id];
+      const sLabel=s==='ok'?'<span class="ok">✓ Conforme</span>':s==='ko'?'<span class="ko">✗ Non conforme</span>':s==='na'?'<span class="na">— N/A</span>':'<span class="pend">? À vérifier</span>';
+
+      let extra = '';
+      if (item.subOptions && subState[item.id] !== null) {
+        extra += `<br><span class="sub-tag">▶ ${item.subOptions[subState[item.id]]}</span>`;
+      }
+      if (item.hasRisk) {
+        const rc = riskState==='O'?'risk-oui':riskState==='N'?'risk-non':riskState==='C'?'risk-nc':'';
+        extra += `<br><span class="${rc}">${riskLabel(riskState)}</span>`;
+      }
+      const noteVal = notes[item.id] ? `<br><em style="color:#475569">${notes[item.id]}</em>` : '';
+      html+=`<tr><td><strong>${item.label}</strong>${extra}<br><span style="color:#64748b;font-size:10px;font-style:italic">${item.desc}</span></td><td>${sLabel}</td><td>${noteVal||'—'}</td></tr>`;
+    });
+    html+='</table>';
+  });
+
+  const kos=[];
+  SECTIONS.forEach(s=>s.items.forEach(i=>{if(state[i.id]==='ko')kos.push({section:s.title,label:i.label,note:notes[i.id]});}));
+  if(kos.length>0){
+    html+=`<div class="ko-section"><h2 style="color:#b91c1c;border-color:#fca5a5">⚠️ Synthèse des non-conformités (${kos.length})</h2>
+    <table><tr><th>Section</th><th>Point de contrôle</th><th>Observation / Action corrective</th></tr>`;
+    kos.forEach(k=>{html+=`<tr><td>${k.section}</td><td style="color:#dc2626;font-weight:bold">${k.label}</td><td>${k.note||'—'}</td></tr>`;});
+    html+='</table></div>';
+  }
+  html+=`<div class="footer">Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')} — Outil Audit Client JANUS | Auditeur : ${auditeur}</div></body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`audit_client_${client.replace(/\s/g,'_')}_${new Date().toISOString().slice(0,10)}.html`;
+  a.click();URL.revokeObjectURL(url);
+}
+
+document.getElementById('currentDate').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'long',year:'numeric'});
+document.getElementById('dateAudit').value=new Date().toISOString().slice(0,10);
+render();
+</script>
+</body>
+</html>
